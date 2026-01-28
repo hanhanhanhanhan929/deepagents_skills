@@ -97,6 +97,20 @@ uv run uvicorn src.api:app --host 0.0.0.0 --port 8001 --reload
 | `/agents/{type}/skills` | GET | 获取 Agent 技能列表 |
 | `/health` | GET | 健康检查 |
 
+
+### 4. 前端demo
+
+```bash
+cd my-chat-ui
+pnpm install
+pnpm dev
+```
+
+访问：http://localhost:3000
+ 
+![页面截图](./docs/UI.png)
+
+
 ### 使用示例
 
 ```bash
@@ -111,6 +125,8 @@ curl -X POST http://localhost:8001/agents/alert_noise_reduction/chat \
 # 获取 Agent 技能
 curl http://localhost:8001/agents/alert_noise_reduction/skills | jq
 ```
+
+
 
 ## 🛠️ Agent 技能与工具
 
@@ -135,7 +151,7 @@ curl http://localhost:8001/agents/alert_noise_reduction/skills | jq
 4. 添加专用工具到 `tools.py`（可选）
 5. 在 `src/agents/__init__.py` 中导入
 
-详细指南请查看 [Agent 开发文档](docs/agent_development_guide.md)。
+详细指南请查看 [Agent 开发文档](./.claude/skills/docs/agent-development-guide.md)。
 
 ## 🔍 核心原理
 
