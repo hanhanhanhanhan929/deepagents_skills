@@ -2,7 +2,7 @@
 
 基于 LangChain Deepagents 构建的**多 Agent Web 服务框架**。
 
-参考: [Deepagents Quickstarts](https://github.com/langchain-ai/deepagents-quickstarts)
+参考: [Deepagents Quickstarts](https://github.com/langchain-ai/deepagents)
 
 ## ✨ 特性
 
