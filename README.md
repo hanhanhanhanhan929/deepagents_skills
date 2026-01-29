@@ -166,5 +166,6 @@ curl http://localhost:8001/agents/alert_noise_reduction/skills | jq
 ## 📚 文档/SKILLS
 
 - [Agent 开发指南](./.claude/skills/docs/agent-development-guide.md) - 如何添加新 Agent
+- [Agent 运行流程](./docs/agent_workflow.md) - Agent 运行流程参考文档
 - 支持直接在支持SKILLS的AI IDE中进行开发（如Claude Code，Cursor等）
 

@@ -24,6 +24,6 @@ AGENT_CONFIG = AgentConfig(
     name="告警降噪助手",
     description="基于历史数据的智能告警降噪分析，提供优先级调整建议",
     version="0.1.0",
-    mcp_services=[],
+    mcp_services=["amap"],
     system_prompt=SYSTEM_PROMPT,
 )
