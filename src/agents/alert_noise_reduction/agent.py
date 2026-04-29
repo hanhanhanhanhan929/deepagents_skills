@@ -41,13 +41,17 @@ class AlertNoiseReductionAgent(BaseAgent):
         self._skills_dir = os.path.join(os.path.dirname(__file__), "skills_data")
 
         # 2. 配置 LLM
-        llm = ChatOpenAI(
-            model=app_config.MODEL_NAME,
-            temperature=app_config.MODEL_TEMPERATURE,
-            api_key=app_config.ALIYUN_API_KEY,
-            base_url=app_config.ALIYUN_BASE_URL,
+        # llm = ChatOpenAI(
+        #     model=app_config.MODEL_NAME,
+        #     temperature=app_config.MODEL_TEMPERATURE,
+        #     api_key=app_config.ALIYUN_API_KEY,
+        #     base_url=app_config.ALIYUN_BASE_URL,
+        # )
+        llm = init_chat_model(
+            "openai:deepseek-ai/DeepSeek-V3",
+            base_url='https://lab.iwhalecloud.com/gpt-proxy/v1',
+            api_key='ailab_GCAFio1O1UJcBmX5wzUvf+zQiBuUZD3QeMuMrhgM6Nji0DteQ5fVDMSbwv9EW/HBU+fI3E8unmNRfDyKaDAMwMR90N1lh569VdF1itjHvrJFxS4r0IatCUE='
         )
-
         # 3. 配置 Backend
         project_root = os.getcwd()
         backend = FilesystemBackend(root_dir=project_root)
@@ -134,7 +138,6 @@ class AlertNoiseReductionAgent(BaseAgent):
             version="v2",
         ):
             event_type = event.get("event")
-            print(event_type)
             if event_type == "on_chat_model_stream":
                 chunk = event["data"].get("chunk")
                 if chunk and hasattr(chunk, "content") and chunk.content:
@@ -249,9 +252,11 @@ class chatbot(BaseAgent):
 
         project = os.getcwd()
         backend = FilesystemBackend(root_dir=project)
+        tools= await self._get_tools()
         self._graph = create_deep_agent(
             model=llm,
             backend=backend,
+            tools=tools,
             system_prompt=self.config.system_prompt,
             checkpointer=MemorySaver(),
         )
@@ -315,6 +320,8 @@ class chatbot(BaseAgent):
         # 发送元数据
         yield EventBuilder.metadata(thread_id, self.agent_id)
 
+        text_buffer = TextBuffer(flush_threshold=150)
+
         async for event in self._graph.astream_events(
             {"messages": [HumanMessage(content=message)]},
             config_dict,
@@ -325,8 +332,8 @@ class chatbot(BaseAgent):
             if event_type == "on_chat_model_stream":
                 chunk = event["data"].get("chunk")
                 if chunk and hasattr(chunk, "content") and chunk.content:
-                    # 直接逐token发送，不做缓冲，实现打字机效果
-                    yield EventBuilder.message_chunk(chunk.content)
+                    for formatted_chunk in text_buffer.add(chunk.content):
+                        yield EventBuilder.message_chunk(formatted_chunk)
 
             elif event_type == "on_tool_start":
                 tool_name = event.get("name", "")
@@ -336,7 +343,10 @@ class chatbot(BaseAgent):
             elif event_type == "on_tool_end":
                 tool_name = event.get("name", "")
                 tool_output = event.get("data", {}).get("output", "")
-                yield EventBuilder.tool_result(tool_name, str(tool_output))
+                if tool_name not in ["read_file", "read_todos", "write_todos"]:
+                    yield EventBuilder.tool_result(tool_name, str(tool_output))
 
         # 流结束
-        yield EventBuilder.done()
+        remaining = text_buffer.flush()
+        if remaining:
+            yield EventBuilder.message_chunk(remaining)

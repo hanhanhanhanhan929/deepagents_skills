@@ -15,34 +15,47 @@ logger = logging.getLogger(__name__)
 @dataclass
 class MCPServiceConfig:
     """MCP 服务配置"""
-    name: str                   # 服务名称
-    transport: str = "stdio"    # 传输方式
-    command: str = "npx"        # 启动命令
-    args: List[str] = field(default_factory=list)  # 命令参数
+    name: str                            # 服务名称
+    transport: str = "stdio"             # 传输方式：stdio / streamable_http / sse
+    # stdio 专用
+    command: str = "npx"                 # 启动命令
+    args: List[str] = field(default_factory=list)   # 命令参数
     env: Dict[str, str] = field(default_factory=dict)  # 环境变量
+    # streamable_http / sse 专用
+    url: str = ""                        # 服务端点 URL
+    headers: Dict[str, str] = field(default_factory=dict)  # HTTP 请求头
     for_agents: List[str] = field(default_factory=list)  # 支持的 Agent 类型
 
 
 # ============================================================
 # MCP 服务注册表
 # ============================================================
-
 # 预定义的 MCP 服务配置
 MCP_SERVICES: Dict[str, MCPServiceConfig] = {
+    # stdio 模式示例（本地启动进程）
+    # "amap": MCPServiceConfig(
+    #     name="amap",
+    #     transport="stdio",
+    #     command="npx",
+    #     args=["-y", "@amap/amap-maps-mcp-server"],
+    #     env={},  # 运行时填充 AMAP_API_KEY
+    #     for_agents=["travel"],
+    # ),
+
+    # streamable_http 模式示例（连接远程 MCP Server）
     "amap": MCPServiceConfig(
         name="amap",
-        transport="stdio",
-        command="npx",
-        args=["-y", "@amap/amap-maps-mcp-server"],
-        env={},  # 运行时填充 AMAP_API_KEY
+        transport="streamable_http",
+        url="https://mcp.api-inference.modelscope.net/7d6f9c780eaf46/mcp",
+        # headers={"Authorization": "Bearer <token>"},  # 若需鉴权可在此添加
         for_agents=["travel"],
     ),
     # 可以添加更多 MCP 服务
     # "prometheus": MCPServiceConfig(
     #     name="prometheus",
-    #     transport="stdio",
-    #     command="...",
-    #     args=[...],
+    #     transport="streamable_http",
+    
+    #     url="http://localhost:9090/mcp",
     #     for_agents=["sre"],
     # ),
 }
@@ -92,28 +105,38 @@ class MCPRegistry:
         
         try:
             from langchain_mcp_adapters.client import MultiServerMCPClient
-            
-            # 准备环境变量
-            env = dict(config.env)
-            
-            # 特殊处理：高德地图需要 API Key
-            if service_name == "amap":
-                api_key = os.getenv("AMAP_API_KEY", "")
-                if not api_key:
-                    logger.warning("AMAP_API_KEY 未配置，高德地图服务不可用")
+
+            if config.transport in {"streamable_http", "streamable-http", "http", "sse"}:
+                # HTTP 类传输：只需 url + headers
+                if not config.url:
+                    logger.error(f"MCP 服务 '{service_name}' 使用 {config.transport} 传输但未配置 url")
                     return []
-                env["AMAP_API_KEY"] = api_key
-                env["AMAP_MAPS_API_KEY"] = api_key
-            
-            # 创建客户端
-            client = MultiServerMCPClient({
-                service_name: {
+                connection: Dict[str, Any] = {
+                    "transport": config.transport,
+                    "url": config.url,
+                }
+                if config.headers:
+                    connection["headers"] = config.headers
+            else:
+                # stdio 传输：command + args + env
+                env = dict(config.env)
+                # 特殊处理：高德地图需要 API Key
+                if service_name == "amap":
+                    api_key = os.getenv("AMAP_API_KEY", "")
+                    if not api_key:
+                        logger.warning("AMAP_API_KEY 未配置，高德地图服务不可用")
+                        return []
+                    env["AMAP_API_KEY"] = api_key
+                    env["AMAP_MAPS_API_KEY"] = api_key
+                connection = {
                     "transport": config.transport,
                     "command": config.command,
                     "args": config.args,
                     "env": env,
                 }
-            })
+
+            # 创建客户端
+            client = MultiServerMCPClient({service_name: connection})
             
             tools = await client.get_tools()
             self._clients[service_name] = client
